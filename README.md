@@ -25,6 +25,12 @@
 
 An open-source, privacy-focused media hub built with Expo + React Native, currently optimized for Android TV & Android.
 
+[Report a Bug](https://github.com/DodoraApp/DodoStream/issues/new?labels=bug&template=bug_report.md)
+
+[Request a Feature](https://github.com/DodoraApp/DodoStream/issues/new?labels=enhancement&template=feature_request.md)
+
+[Start a Discussion (for general ideas, suggestions, decisions)](https://github.com/DodoraApp/DodoStream/discussions/new/choose)
+
 Supports **Stremio Addons** (see details below).
 
 **Vision**
