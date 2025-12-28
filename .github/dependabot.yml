@@ -1,8 +1,55 @@
 version: 2
 updates:
   # Enable version updates for npm
-  - package-ecosystem: "npm"
+  - package-ecosystem: 'npm'
     # Look for `package.json` and `lock` files in the `root` directory
-    directory: "/"
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+
+    open-pull-requests-limit: 10
+
+    # Expo/RN projects are sensitive to major bumps without an SDK upgrade.
+    # Keep majors manual; let CI (expo doctor / expo install --check) enforce compatibility.
+    ignore:
+      - dependency-name: 'expo'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'expo-*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@expo/*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-native'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@react-navigation/*'
+        update-types: ['version-update:semver-major']
+
+    groups:
+      expo-sdk:
+        patterns:
+          - 'expo'
+          - 'expo-*'
+          - '@expo/*'
+          - 'react'
+          - 'react-dom'
+          - 'react-native'
+          - 'react-native-*'
+          - '@react-native*'
+          - '@react-navigation/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+      tooling:
+        patterns:
+          - 'eslint*'
+          - 'prettier'
+          - 'typescript'
+          - 'jest*'
+          - '@types/*'
+        update-types:
+          - 'minor'
+          - 'patch'

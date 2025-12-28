@@ -68,6 +68,18 @@ jobs:
       - name: 📦 Install dependencies
         run: pnpm install
 
+      - name: 🩺 Expo dependency compatibility (expo install --check)
+        run: pnpm exec expo install --check
+        env:
+          CI: true
+          EXPO_NO_TELEMETRY: 1
+
+      - name: 🩺 Expo Doctor
+        run: pnpx expo-doctor
+        env:
+          CI: true
+          EXPO_NO_TELEMETRY: 1
+
       - name: 🧪 Run TypeScript check
         run: pnpm tsc
 
