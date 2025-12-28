@@ -38,7 +38,8 @@ describe('ContinueWatchingCard', () => {
     );
 
     // Assert
-    expect(getByText('Show - S1E2: Episode Title')).toBeTruthy();
+    expect(getByText('Show')).toBeTruthy();
+    expect(getByText('S1E2: Episode Title')).toBeTruthy();
     expect(getByText('S1E2')).toBeTruthy();
     expect(queryByText('UP NEXT')).toBeNull();
     expect(getByTestId('continue-watching-progress')).toBeTruthy();

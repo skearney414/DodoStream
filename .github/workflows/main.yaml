@@ -2,13 +2,13 @@ name: React Native CI/CD
 
 on:
   push:
-    branches: [main, master]
+    branches: ['**']
     paths-ignore:
       - '**.md'
       - 'LICENSE'
       - 'docs/**'
   pull_request:
-    branches: [main, master]
+    branches: ['**']
   workflow_dispatch:
     inputs:
       buildType:
@@ -45,7 +45,7 @@ env:
 jobs:
   check-skip:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     steps:
       - name: Skip CI check
         run: echo "Proceeding with workflow"
@@ -79,9 +79,8 @@ jobs:
       - name: 🧹 Run ESLint & Prettier
         run: pnpm run lint
 
-      # TODO re-enable when stable
-      # - name: ✅ Run Tests
-      #   run: pnpm run test
+      - name: ✅ Run Tests
+        run: pnpm run test
 
   build:
     needs: test

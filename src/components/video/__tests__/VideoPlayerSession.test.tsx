@@ -159,11 +159,13 @@ describe('VideoPlayerSession', () => {
     // Arrange
     watchHistoryState.byProfile.p1 = {
       m1: {
-        id: 'm1',
-        type: 'movie',
-        progressSeconds: 30,
-        durationSeconds: 100,
-        lastWatchedAt: 1,
+        _: {
+          id: 'm1',
+          type: 'movie',
+          progressSeconds: 30,
+          durationSeconds: 100,
+          lastWatchedAt: 1,
+        },
       },
     };
 

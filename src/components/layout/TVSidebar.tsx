@@ -71,7 +71,7 @@ const SidebarItem: FC<SidebarItemProps> = ({ item, onPress, onFocus }) => {
   }, [pathname, item.route]);
 
   return (
-    <Focusable onPress={onPress} onFocusChange={(focused) => focused && onFocus?.()} noOutline>
+    <Focusable onPress={onPress} onFocusChange={(isFocused) => isFocused && onFocus?.()}>
       {({ isFocused }) => {
         const iconColor = isActive
           ? theme.colors.primaryBackground

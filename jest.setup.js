@@ -22,6 +22,21 @@ jest.mock('@expo/vector-icons', () => {
     };
 });
 
+// Moti ships ESM builds; mock to avoid Jest ESM transform issues.
+jest.mock('moti', () => {
+    const React = require('react');
+    const { View } = require('react-native');
+
+    const MotiView = React.forwardRef((props, ref) =>
+        React.createElement(View, { ...props, ref }, props.children)
+    );
+
+    return {
+        MotiView,
+        AnimatePresence: ({ children }) => children,
+    };
+});
+
 // React Query schedules updates via notifyManager; wrap them in act() to avoid warnings.
 try {
     const { act } = require('@testing-library/react-native');

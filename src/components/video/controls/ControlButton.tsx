@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Box, Text } from '@/theme/theme';
+import { useTheme } from '@shopify/restyle';
+import { Box, Text, Theme } from '@/theme/theme';
 import { Button, ButtonProps, IconComponentType } from '@/components/basic/Button';
 
 export interface ControlButtonProps extends Pick<
@@ -23,24 +24,27 @@ export const ControlButton = memo(
     variant = 'secondary',
     ...buttonProps
   }: ControlButtonProps) => {
-    const [focused, setFocused] = useState(false);
+    const theme = useTheme<Theme>();
+    const [isFocused, setIsFocused] = useState(false);
 
     const handleFocused = useCallback(() => {
-      setFocused(true);
+      setIsFocused(true);
       onFocusChange?.(true);
     }, [onFocusChange]);
 
     const handleBlurred = useCallback(() => {
-      setFocused(false);
+      setIsFocused(false);
       onFocusChange?.(false);
     }, [onFocusChange]);
 
     return (
       <Box alignItems="center" justifyContent="center" position="relative">
-        {!disabled && label && focused && (
-          <Text variant="caption" color="mainForeground" position="absolute" top={-22}>
-            {label}
-          </Text>
+        {!disabled && label && isFocused && (
+          <Box position="absolute" top={-theme.spacing.l}>
+            <Text variant="caption" color="mainForeground">
+              {label}
+            </Text>
+          </Box>
         )}
         <Button
           {...buttonProps}

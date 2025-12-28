@@ -115,7 +115,6 @@ export default function MediaDetails() {
             {mediaData.videos && mediaData.videos.length > 1 && (
               <EpisodeList
                 metaId={id}
-                mediaType={type}
                 videos={mediaData.videos}
                 onEpisodePress={handleEpisodePress}
               />

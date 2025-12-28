@@ -41,7 +41,7 @@ export type ButtonProps<T extends IconComponentType> = React.ComponentProps<
   Omit<React.ComponentProps<typeof Focusable>, 'children'> & {
     title?: string;
     disabled?: boolean;
-    icon: IconName<T>;
+    icon?: IconName<T>;
     iconComponent?: T;
   };
 

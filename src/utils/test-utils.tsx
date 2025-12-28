@@ -2,7 +2,13 @@ import React from 'react';
 import { render, renderHook } from '@testing-library/react-native';
 import { ThemeProvider } from '@shopify/restyle';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import theme from '@/theme/theme';
+
+const SAFE_AREA_INITIAL_METRICS = {
+  frame: { x: 0, y: 0, width: 0, height: 0 },
+  insets: { top: 0, left: 0, right: 0, bottom: 0 },
+};
 
 export function createTestQueryClient() {
   return new QueryClient({
@@ -23,7 +29,11 @@ export function renderWithProviders(
   const queryClient = options?.queryClient;
 
   const Wrapper = ({ children }: { children: React.ReactNode }) => {
-    const themed = <ThemeProvider theme={theme}>{children}</ThemeProvider>;
+    const themed = (
+      <SafeAreaProvider initialMetrics={SAFE_AREA_INITIAL_METRICS}>
+        <ThemeProvider theme={theme}>{children}</ThemeProvider>
+      </SafeAreaProvider>
+    );
     if (!queryClient) return themed;
     return <QueryClientProvider client={queryClient}>{themed}</QueryClientProvider>;
   };
@@ -40,7 +50,11 @@ export function renderHookWithProviders<TProps, TResult>(
 ) {
   const queryClient = options?.queryClient;
   const Wrapper = ({ children }: { children: React.ReactNode }) => {
-    const themed = <ThemeProvider theme={theme}>{children}</ThemeProvider>;
+    const themed = (
+      <SafeAreaProvider initialMetrics={SAFE_AREA_INITIAL_METRICS}>
+        <ThemeProvider theme={theme}>{children}</ThemeProvider>
+      </SafeAreaProvider>
+    );
     if (!queryClient) return themed;
     return <QueryClientProvider client={queryClient}>{themed}</QueryClientProvider>;
   };
