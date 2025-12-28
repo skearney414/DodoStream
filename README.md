@@ -175,6 +175,10 @@ This project is inspired by other community streaming clients and media projects
 - [NuvioStreaming](https://github.com/tapframe/NuvioStreaming)
 - [Cinephage](https://github.com/MoldyTaint/Cinephage)
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=DodoraApp/DodoStream&type=date&legend=top-left)](https://www.star-history.com/#DodoraApp/DodoStream&type=date&legend=top-left)
+
 ## Legal / Disclaimer
 
 DodoStream is an independent, community-driven project and is **not affiliated with Stremio**.
