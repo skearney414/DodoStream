@@ -56,11 +56,9 @@ These *are* outdated but kept for an initial impression.
 
 See more screenshots in the [docs/screenshots](docs/screenshots) folder.
 
-## Roadmap
+## Features
 
 This project is under active development. Expect occasional breaking changes, unfinished features, and rough edges.
-
-### Implemented
 
 - [x] Almost full Stremio Addon support
 - [x] Addon manager (install via manifest URL, remove addons)
@@ -82,78 +80,13 @@ This project is under active development. Expect occasional breaking changes, un
 - [x] My List (local, per-profile)
 - [x] New release checking
 
-### Features
+This list will not be updated anymore, see [closed feature tickets](https://github.com/DodoraApp/DodoStream/issues?q=is%3Aissue%20state%3Aclosed%20type%3AFeature) for up-to-date information.
 
-- [ ] YouTube Player Support (for Streams & Trailers)
-- [ ] Library (old "My List") Page with watched/finished media/lists from providers
-- [ ] Settings Sync/Export/Import
-- [ ] Discover Page with filters & sorting
-- [ ] Search History
-- [ ] Themes
-- [ ] External Player
-- [ ] Android TV Home Screen catalogs
-- [ ] Skip Intro functionality using IntroDB
-- [ ] Offline Viewing / Downloads (Mobile)
-- [ ] Picture-in-Picture (PiP) Support
-- [ ] Chromecast / AirPlay Casting
-- [ ] Parental Controls for profiles
-- [ ] Deep Linking support
-- [ ] "Random" / Shuffle Play
-- [ ] Onboarding wizard
-- [ ] MPV Player Support
-- [ ] TMDB Metadata enrichment
+## Roadmap
 
-### More Settings / Customization
+See [Feature issues](https://github.com/DodoraApp/DodoStream/issues?q=is%3Aissue%20type%3AFeature) for described features & [Milestones](https://github.com/DodoraApp/DodoStream/milestones) for planned features.
 
-- [ ] Addons enabled per-profile
-- [ ] Auto Select First Stream (skip stream selection screen)
-- [ ] Subtitles Style/Size etc.
-- [ ] Audio/Subtitle Delay adjustment
-- [ ] Aspect Ratio controls (Zoom, Fit, Stretch)
-- [ ] Reorder Addons
-- [ ] Disable & Reorder individual Catalogs on Home & Search
-- [ ] Poster Size
-- [ ] Skip Duration
-- [ ] Disable Animations
-- [ ] Playback Speed Control (0.5x - 2.0x)
-- [ ] Sleep Timer
-- [ ] UI Localization (i18n)
-
-### UI / UX Improvements
-
-- [ ] Customizable Hero section on home screen
-- [ ] More Animations
-- [ ] "Starts in..." countdown on Up Next Popup
-- [ ] "Stats for Nerds" overlay (Bitrate, Codec, Dropped frames)
-- [ ] Cast & Crew clickable links (search by actor/director)
-- [ ] "Similar" / "Recommended" section on details page
-- [ ] Recently added / Trending / Random rails on home
-- [ ] Badge chips for quality (4K, HDR, Dolby Atmos)
-- [ ] Show "Ends at" time when playing & current system time
-- [ ] Adaptive Frame Rate Support
-- [ ] Button that links to addon configuration page if addon is configurable
-- [ ] Accessibility
-
-### Full Stremio Addon SDK Support
-
-> Note: Torrenting-related features are currently out of scope.
-
-- [ ] Subtitles from Addons
-- [ ] Trailers
-- [ ] Behaviour hints: headers
-- [ ] Addon Catalogs
-
-### Integrations
-
-- [ ] Simkl Integration for Watch History, Scrobbling & Playlists
-- [ ] Trakt Integration for Watch History, Scrobbling & Playlists
-
-### Technical
-
-- [ ] Replace Burnt with custom Toasts or another library
-- [ ] Auto-updater for Android APKs
-- [ ] Crash Reporting
-- [ ] Performance Profiling
+See [IDEAS.md](IDEAS.md) for currently unplanned feature ideas.
 
 ## Supported Platforms
 
@@ -172,7 +105,7 @@ This project is under active development. Expect occasional breaking changes, un
 
 ## Contributing
 
-PRs and issues are welcome.
+PRs and issues are welcome. See [good first issues](https://github.com/DodoraApp/DodoStream/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22) for a starting point.
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding style, and how to submit changes.
 - Please follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
