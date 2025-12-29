@@ -319,7 +319,8 @@ jobs:
         with:
           tag: v${{ steps.app_version.outputs.version }}
           name: v${{ steps.app_version.outputs.version }}
-          token: ${{ secrets.GITHUB_RELEASE_TOKEN }}
+          # Custom PAT token required so that the other on: release workflow is triggered
+          token: ${{ secrets.RELEASE_PAT }}
           artifacts: dist/*.apk
           allowUpdates: true
           replacesArtifacts: true
