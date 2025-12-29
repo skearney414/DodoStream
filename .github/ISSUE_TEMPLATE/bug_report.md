@@ -2,7 +2,7 @@
 name: Bug report
 about: Report a problem or regression
 title: '[Bug]: '
-labels: [bug]
+type: 'Bug'
 ---
 
 ## Summary
