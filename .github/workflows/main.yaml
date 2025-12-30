@@ -314,7 +314,7 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: 🏷️ Create/Update GitHub Release
+      - name: 🏷️ Create GitHub Release if not exists
         uses: ncipollo/release-action@v1
         with:
           tag: v${{ steps.app_version.outputs.version }}
@@ -322,6 +322,6 @@ jobs:
           # Custom PAT token required so that the other on: release workflow is triggered
           token: ${{ secrets.RELEASE_PAT }}
           artifacts: dist/*.apk
-          allowUpdates: true
-          replacesArtifacts: true
+          allowUpdates: false
+          skipIfReleaseExists: true
           generateReleaseNotes: true
