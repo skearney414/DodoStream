@@ -12,6 +12,10 @@ import { useProfileSettingsStore } from '@/store/profile-settings.store';
 const isStreamAvailable = (stream: StreamType) =>
   Boolean(stream.url || stream.externalUrl || stream.ytId);
 
+const parseBooleanParam = (value?: string): boolean => {
+  if (!value) return false;
+  return value === '1' || value.toLowerCase() === 'true';
+};
 interface UseAutoPlayParams {
   metaId: string;
   videoId: string;
@@ -20,10 +24,6 @@ interface UseAutoPlayParams {
   autoPlay?: string;
   playerTitle?: string;
 }
-const parseBooleanParam = (value?: string): boolean => {
-  if (!value) return false;
-  return value === '1' || value.toLowerCase() === 'true';
-};
 
 export const useAutoPlay = ({
   metaId,
@@ -104,8 +104,6 @@ export const useAutoPlay = ({
       const stream = candidates[autoPlayAttemptRef.current++];
       if (!stream) return setAutoPlayFailed(true);
 
-      debug('autoPlayAttempt', { attempt: autoPlayAttemptRef.current, name: stream.name });
-      console.log('Trying to auto play stream:', stream);
       openStreamFromStream({
         metaId,
         videoId,

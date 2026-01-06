@@ -47,7 +47,7 @@ export default function StreamsPage() {
       <Container disablePadding safeAreaEdges={['left', 'right', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
         <Box flex={1} backgroundColor="mainBackground">
-          <LoadingIndicator message={`Auto playing...`} />
+          <LoadingIndicator message="Auto playing..." />
         </Box>
       </Container>
     );
