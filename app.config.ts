@@ -3,72 +3,19 @@ const packageJson = require('./package.json');
 
 export default ({ config }: ConfigContext): ExpoConfig => {
     const appBackgroundColor = '#181A20';
-    const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
-    const plugins: ExpoConfig['plugins'] = [
-        [
-            'expo-build-properties',
-            {
-                android: {
-                    usesCleartextTraffic: true,
-                    buildArchs: ['armeabi-v7a', 'arm64-v8a'],
-                    minSdkVersion: 26,
-                },
-            },
-        ],
-        'expo-system-ui',
-        [
-            '@react-native-tvos/config-tv',
-            {
-                androidTVBanner: "assets/app/banner.png",
-            }
-        ],
-        'expo-router',
-        'expo-localization',
-        [
-            'expo-font',
-            {
-                fonts: [
-                    'node_modules/@expo-google-fonts/outfit/400Regular/Outfit_400Regular.ttf',
-                    'node_modules/@expo-google-fonts/outfit/700Bold/Outfit_700Bold.ttf',
-                    'node_modules/@expo-google-fonts/poppins/400Regular/Poppins_400Regular.ttf',
-                    'node_modules/@expo-google-fonts/poppins/700Bold/Poppins_700Bold.ttf',
-                ],
-            },
-        ],
-        [
-            'react-native-video',
-            {
-                enableNotificationControls: true,
-                enableBackgroundAudio: false,
-                enableADSExtension: false,
-                enableCacheExtension: true,
-                enableAndroidPictureInPicture: true,
-                androidExtensions: {
-                    useExoplayerRtsp: false,
-                    useExoplayerSmoothStreaming: false,
-                    useExoplayerHls: false,
-                    useExoplayerDash: false,
-                },
-            },
-        ],
-        'expo-libvlc-player',
-    ]
+    // Build variant selection (used to keep dev/prod separately installable).
+    // Set via EAS build profile env: APP_VARIANT=dev|prod
+    const appVariant = (process.env.APP_VARIANT ?? 'prod').toLowerCase();
+    const isDevVariant = appVariant !== 'prod';
 
-    if(sentryDsn) {
-        plugins.push([
-            "@sentry/react-native/expo",
-            {
-                "url": "https://sentry.io/",
-                "project": "dodostream",
-                "organization": "dodora"
-            }
-        ])
-    }
+    const appName = isDevVariant ? 'DodoStream (Dev)' : 'DodoStream';
+    const iosBundleIdentifier = isDevVariant ? 'app.dodora.dodostream.dev' : 'app.dodora.dodostream';
+    const androidPackage = isDevVariant ? 'app.dodora.dodostream.dev' : 'app.dodora.dodostream';
 
     return {
         ...config,
-        name: 'DodoStream',
+        name: appName,
         slug: 'dodostream',
         version: packageJson.version,
         newArchEnabled: true,
@@ -80,7 +27,62 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                 cacheDir: 'node_modules/.expo-build-disk-cache',
             },
         },
-        plugins,
+        plugins: [
+            [
+                'expo-build-properties',
+                {
+                    android: {
+                        usesCleartextTraffic: true,
+                        buildArchs: ['armeabi-v7a', 'arm64-v8a'],
+                        minSdkVersion: 26,
+                    },
+                },
+            ],
+            'expo-system-ui',
+            [
+                '@react-native-tvos/config-tv',
+                {
+                    androidTVBanner: "assets/app/banner.png",
+                }
+            ],
+            'expo-router',
+            'expo-localization',
+            [
+                'expo-font',
+                {
+                    fonts: [
+                        'node_modules/@expo-google-fonts/outfit/400Regular/Outfit_400Regular.ttf',
+                        'node_modules/@expo-google-fonts/outfit/700Bold/Outfit_700Bold.ttf',
+                        'node_modules/@expo-google-fonts/poppins/400Regular/Poppins_400Regular.ttf',
+                        'node_modules/@expo-google-fonts/poppins/700Bold/Poppins_700Bold.ttf',
+                    ],
+                },
+            ],
+            [
+                'react-native-video',
+                {
+                    enableNotificationControls: true,
+                    enableBackgroundAudio: false,
+                    enableADSExtension: false,
+                    enablFeCacheExtension: true,
+                    enableAndroidPictureInPicture: true,
+                    androidExtensions: {
+                        useExoplayerRtsp: false,
+                        useExoplayerSmoothStreaming: false,
+                        useExoplayerHls: false,
+                        useExoplayerDash: false,
+                    },
+                },
+            ],
+            'expo-libvlc-player',
+            [
+                "@sentry/react-native/expo",
+                {
+                    organization: process.env.SENTRY_ORG ?? 'dodora',
+                    project: process.env.SENTRY_PROJECT ?? 'dodostream',
+                }
+            ]
+        ],
         experiments: {
             typedRoutes: true,
             tsconfigPaths: true,
@@ -97,16 +99,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         assetBundlePatterns: ['**/*'],
         ios: {
             supportsTablet: true,
-            bundleIdentifier: 'app.dodora.dodostream',
+            bundleIdentifier: iosBundleIdentifier,
             backgroundColor: appBackgroundColor,
         },
         android: {
-            adaptiveIcon: {
-                foregroundImage: './assets/app/adaptive-icon.png',
-                backgroundColor: appBackgroundColor,
-            },
             userInterfaceStyle: 'dark',
-            package: 'app.dodora.dodostream',
+            package: androidPackage,
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
                 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',

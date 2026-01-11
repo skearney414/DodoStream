@@ -1,4 +1,4 @@
-import { FC, useCallback, useMemo, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box } from '@/theme/theme';
 import * as Burnt from 'burnt';
 
@@ -6,22 +6,34 @@ import { RNVideoPlayer } from './RNVideoPlayer';
 import { VLCPlayer } from './VLCPlayer';
 import { PlayerControls } from './PlayerControls';
 import { UpNextPopup, type UpNextResolved } from './UpNextPopup';
+import { CustomSubtitles } from './CustomSubtitles';
+import { PlayerLoadingScreen } from './PlayerLoadingScreen';
 
 import { AudioTrack, PlayerRef, TextTrack } from '@/types/player';
 import type { ContentType } from '@/types/stremio';
 import { useProfileStore } from '@/store/profile.store';
 import { useProfileSettingsStore } from '@/store/profile-settings.store';
 import { useWatchHistoryStore } from '@/store/watch-history.store';
-import { findBestTrackByLanguage, getPreferredLanguageCodes } from '@/utils/languages';
+import { usePlaybackStore } from '@/store/playback.store';
+import {
+  findBestTrackByLanguage,
+  getPreferredLanguageCodes,
+  normalizeLanguageCode,
+} from '@/utils/languages';
+import { combineSubtitles } from '@/utils/subtitles';
 import {
   SKIP_FORWARD_SECONDS,
   SKIP_BACKWARD_SECONDS,
   PLAYBACK_RATIO_PERSIST_INTERVAL,
+  UPNEXT_POPUP_SERIES_RATIO,
+  UPNEXT_POPUP_MOVIE_RATIO,
 } from '@/constants/playback';
 import { TOAST_DURATION_LONG, TOAST_DURATION_MEDIUM } from '@/constants/ui';
 import { useDebugLogger } from '@/utils/debug';
 import { useMediaNavigation } from '@/hooks/useMediaNavigation';
 import { getVideoSessionId } from '@/utils/stream';
+import { useSubtitles } from '@/api/stremio';
+import { useNativeSubtitleStyle } from '@/hooks/useSubtitleStyle';
 
 export interface VideoPlayerProps {
   source: string;
@@ -31,6 +43,10 @@ export interface VideoPlayerProps {
   videoId?: string;
   /** Stream behaviorHints.group of the currently playing stream (if any). */
   bingeGroup?: string;
+  /** Background image URL for initial loading screen. */
+  backgroundImage?: string;
+  /** Logo image URL for initial loading screen. */
+  logoImage?: string;
   onStop?: () => void;
   onError?: (message: string) => void;
 }
@@ -42,6 +58,34 @@ export interface VideoPlayerSessionProps extends VideoPlayerProps {
   automaticFallback: boolean;
 }
 
+// Combine subtitle tracks from addon sources and the internal video player.
+// Group by language, sort preferred languages first (in order), then a divider and the rest alphabetically.
+// Within a language group: addon-provided subtitles first (sorted by addonName/title), then video source tracks.
+const useSubtitleCombiner = (mediaType: ContentType, metaId: string, videoId?: string) => {
+  const [videoSubtitles, setVideoSubtitles] = useState<TextTrack[] | undefined>();
+  const { data: addonSubtitles = [], isLoading: areSubtitlesLoading } = useSubtitles(
+    mediaType,
+    metaId,
+    videoId
+  );
+
+  const activeProfileId = useProfileStore((s) => s.activeProfileId);
+  const preferredSubtitleLanguages = useProfileSettingsStore((state) =>
+    activeProfileId ? state.byProfile[activeProfileId]?.preferredSubtitleLanguages : undefined
+  );
+
+  const combinedSubtitles = useMemo(() => {
+    if (areSubtitlesLoading) return [] as TextTrack[];
+    return combineSubtitles(videoSubtitles, addonSubtitles, preferredSubtitleLanguages);
+  }, [addonSubtitles, areSubtitlesLoading, preferredSubtitleLanguages, videoSubtitles]);
+
+  return {
+    combinedSubtitles,
+    areSubtitlesLoading,
+    setVideoSubtitles,
+  };
+};
+
 export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
   source,
   title,
@@ -49,6 +93,8 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
   metaId,
   videoId,
   bingeGroup,
+  backgroundImage,
+  logoImage,
   onStop,
   onError,
   usedPlayerType,
@@ -62,6 +108,10 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
   const { replaceToStreams } = useMediaNavigation();
   const activeProfileId = useProfileStore((state) => state.activeProfileId);
 
+  // Track if this is the first load (for showing custom loading screen)
+  const isFirstLoadRef = useRef(true);
+  const hasBackgroundOrLogo = !!(backgroundImage || logoImage);
+
   const { preferredAudioLanguages } = useProfileSettingsStore((state) => ({
     preferredAudioLanguages: activeProfileId
       ? state.byProfile[activeProfileId]?.preferredAudioLanguages
@@ -70,6 +120,11 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
       ? state.byProfile[activeProfileId]?.preferredSubtitleLanguages
       : undefined,
   }));
+
+  const nativeSubtitleStyle = useNativeSubtitleStyle();
+
+  // Local subtitle delay state (not persisted)
+  const [subtitleDelay, setSubtitleDelay] = useState(0);
 
   const resumeHistoryItem = useWatchHistoryStore((state) => {
     if (!activeProfileId) return undefined;
@@ -80,28 +135,128 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
   const [paused, setPaused] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
 
-  const progressRatio = useMemo(() => {
+  // Throttled progress ratio for UpNextPopup - only updates at meaningful thresholds
+  // This prevents UpNextPopup from re-evaluating visibility on every 250ms progress tick
+  const upNextThreshold =
+    mediaType === 'series' ? UPNEXT_POPUP_SERIES_RATIO : UPNEXT_POPUP_MOVIE_RATIO;
+  const lastThrottledRatioRef = useRef(0);
+
+  const throttledProgressRatio = useMemo(() => {
     if (duration <= 0) return 0;
-    return currentTime / duration;
-  }, [currentTime, duration]);
+    const rawRatio = currentTime / duration;
+
+    // Only update when:
+    // 1. Crossing the upnext threshold (either direction)
+    // 2. At significant intervals (every 5%) before threshold
+    const lastRatio = lastThrottledRatioRef.current;
+    const crossedThreshold =
+      (lastRatio < upNextThreshold && rawRatio >= upNextThreshold) ||
+      (lastRatio >= upNextThreshold && rawRatio < upNextThreshold);
+
+    if (crossedThreshold) {
+      lastThrottledRatioRef.current = rawRatio;
+      return rawRatio;
+    }
+
+    // Once past threshold, update more frequently for accurate countdown
+    if (rawRatio >= upNextThreshold) {
+      lastThrottledRatioRef.current = rawRatio;
+      return rawRatio;
+    }
+
+    // Before threshold, only update at 5% intervals to reduce re-renders
+    const interval = 0.05;
+    if (Math.floor(rawRatio / interval) !== Math.floor(lastRatio / interval)) {
+      lastThrottledRatioRef.current = rawRatio;
+      return rawRatio;
+    }
+
+    return lastRatio;
+  }, [currentTime, duration, upNextThreshold]);
 
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
-  const [textTracks, setTextTracks] = useState<TextTrack[]>([]);
   const [selectedAudioTrack, setSelectedAudioTrack] = useState<AudioTrack>();
   const [selectedTextTrack, setSelectedTextTrack] = useState<TextTrack>();
+
+  const { combinedSubtitles, areSubtitlesLoading, setVideoSubtitles } = useSubtitleCombiner(
+    mediaType,
+    metaId,
+    videoId
+  );
 
   const lastPersistAtRef = useRef(0);
   const lastKnownTimeRef = useRef(0);
   const lastKnownDurationRef = useRef(0);
   const resumeAppliedKeyRef = useRef<string | null>(null);
   const didPersistLastTargetRef = useRef(false);
+  const subtitlePreferenceAppliedRef = useRef(false);
+
+  // Auto-apply saved subtitle preference when subtitles are loaded
+  useEffect(() => {
+    if (subtitlePreferenceAppliedRef.current) return;
+    if (areSubtitlesLoading || combinedSubtitles.length === 0) return;
+    if (selectedTextTrack) return; // Don't override if already selected
+
+    const savedPreference = usePlaybackStore.getState().getActivePlaybackState().subtitlePreference;
+    if (!savedPreference) return;
+
+    debug('autoApplySubtitlePreference', {
+      savedPreference,
+      availableCount: combinedSubtitles.length,
+    });
+
+    // Try to find a matching track based on saved preference
+    const normalizedSavedLang = normalizeLanguageCode(savedPreference.language);
+    let bestMatch: TextTrack | undefined;
+
+    // Priority 1: Exact match (same source, addon, and language)
+    if (savedPreference.source === 'addon' && savedPreference.addonId) {
+      bestMatch = combinedSubtitles.find(
+        (t) =>
+          t.source === 'addon' &&
+          t.addonId === savedPreference.addonId &&
+          normalizeLanguageCode(t.language) === normalizedSavedLang
+      );
+    }
+
+    // Priority 2: Same source and language (any addon or video track)
+    if (!bestMatch) {
+      bestMatch = combinedSubtitles.find(
+        (t) =>
+          t.source === savedPreference.source &&
+          normalizeLanguageCode(t.language) === normalizedSavedLang
+      );
+    }
+
+    // Priority 3: Same language, any source
+    if (!bestMatch && normalizedSavedLang) {
+      bestMatch = combinedSubtitles.find(
+        (t) => normalizeLanguageCode(t.language) === normalizedSavedLang
+      );
+    }
+
+    if (bestMatch) {
+      debug('autoApplySubtitlePreference:matched', {
+        index: bestMatch.index,
+        source: bestMatch.source,
+        language: bestMatch.language,
+        addonId: bestMatch.addonId,
+      });
+      subtitlePreferenceAppliedRef.current = true;
+      setSelectedTextTrack(bestMatch);
+    } else {
+      debug('autoApplySubtitlePreference:noMatch');
+      subtitlePreferenceAppliedRef.current = true;
+    }
+  }, [activeProfileId, areSubtitlesLoading, combinedSubtitles, debug, selectedTextTrack]);
 
   const didStartNextRef = useRef(false);
   const [autoplayCancelled, setAutoplayCancelled] = useState(false);
   const [upNextDismissed, setUpNextDismissed] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
 
   const upNextVideoIdRef = useRef<string | undefined>(undefined);
   const [upNextResolved, setUpNextResolved] = useState<UpNextResolved | undefined>(undefined);
@@ -189,6 +344,9 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
     (data: { duration: number }) => {
       debug('load', { duration: data.duration, usedPlayerType, playerType, automaticFallback });
 
+      // Mark first load as complete
+      isFirstLoadRef.current = false;
+
       // Only remember the last stream if playback actually starts loading successfully.
       // This prevents a broken stream URL from being remembered and re-tried forever.
       if (!didPersistLastTargetRef.current && data.duration > 0) {
@@ -211,7 +369,7 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
         : 0;
 
       setDuration(data.duration);
-      setIsLoading(false);
+      setIsVideoLoading(false);
       setPaused(false);
       lastKnownDurationRef.current = data.duration;
 
@@ -269,7 +427,7 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
           haptic: 'warning',
           duration: TOAST_DURATION_MEDIUM,
         });
-        setIsLoading(true);
+        setIsVideoLoading(true);
         setUsedPlayerType(newPlayer);
       } else {
         Burnt.toast({
@@ -330,9 +488,9 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
   const handleTextTracksLoaded = useCallback(
     (tracks: TextTrack[]) => {
       debug('textTracksLoaded', { count: tracks.length });
-      setTextTracks(tracks);
+      setVideoSubtitles(tracks);
     },
-    [debug]
+    [debug, setVideoSubtitles]
   );
 
   const handleSelectAudioTrack = useCallback(
@@ -347,21 +505,59 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
   );
 
   const handleSelectTextTrack = useCallback(
-    (index?: number) => {
-      debug('selectTextTrack', { index });
+    (index?: number, isAutoSelect = false) => {
+      debug('selectTextTrack', { index, isAutoSelect });
+
+      // If already selected, do nothing
+      if (selectedTextTrack?.index === index) return;
+
       if (index === undefined) {
         setSelectedTextTrack(undefined);
+        if (!isAutoSelect && activeProfileId) {
+          usePlaybackStore.getState().clearSubtitlePreference();
+          debug('subtitlePreferenceCleared');
+        }
         return;
       }
-      const chosenTextTrack = textTracks.find((tt) => tt.index === index);
-      if (chosenTextTrack && (!selectedTextTrack || selectedTextTrack.index !== index)) {
-        setSelectedTextTrack(chosenTextTrack);
+
+      const chosenTextTrack = combinedSubtitles?.find((tt) => tt.index === index);
+      if (!chosenTextTrack) {
+        debug('selectTextTrack:notFound', { index });
+        return;
+      }
+
+      debug('selectTextTrack:selected', {
+        index,
+        source: chosenTextTrack.source,
+        language: chosenTextTrack.language,
+        addonId: chosenTextTrack.addonId,
+        addonName: chosenTextTrack.addonName,
+      });
+      setSelectedTextTrack(chosenTextTrack);
+
+      // Remember subtitle preference when user manually selects (not auto-select)
+      if (!isAutoSelect && activeProfileId) {
+        usePlaybackStore.getState().setSubtitlePreference({
+          source: chosenTextTrack.source,
+          language: normalizeLanguageCode(chosenTextTrack.language) ?? chosenTextTrack.language,
+          addonId: chosenTextTrack.addonId,
+          addonName: chosenTextTrack.addonName,
+        });
+        debug('subtitlePreferenceSaved', {
+          source: chosenTextTrack.source,
+          language: chosenTextTrack.language,
+          addonId: chosenTextTrack.addonId,
+        });
       }
     },
-    [debug, selectedTextTrack, textTracks]
+    [activeProfileId, combinedSubtitles, debug, selectedTextTrack]
   );
 
   const PlayerComponent = usedPlayerType === 'vlc' ? VLCPlayer : RNVideoPlayer;
+  const isLoading = isVideoLoading || areSubtitlesLoading;
+
+  // Show custom loading screen on first load if background/logo is available
+  const showCustomLoadingScreen = isLoading && isFirstLoadRef.current && hasBackgroundOrLogo;
   return (
     <Box flex={1} backgroundColor="playerBackground">
       <PlayerComponent
@@ -377,39 +573,60 @@ export const VideoPlayerSession: FC<VideoPlayerSessionProps> = ({
         onAudioTracks={handleAudioTracksLoaded}
         onTextTracks={handleTextTracksLoaded}
         selectedAudioTrack={selectedAudioTrack}
-        selectedTextTrack={selectedTextTrack}
+        selectedTextTrack={selectedTextTrack?.source === 'video' ? selectedTextTrack : undefined}
+        subtitleStyle={nativeSubtitleStyle}
       />
 
-      <PlayerControls
-        paused={paused}
-        currentTime={currentTime}
-        duration={duration}
-        showLoadingIndicator={isLoading || isBuffering}
-        title={title}
-        audioTracks={audioTracks}
-        textTracks={textTracks}
-        selectedAudioTrack={selectedAudioTrack}
-        selectedTextTrack={selectedTextTrack}
-        onPlayPause={handlePlayPause}
-        onSeek={handleSeek}
-        onSkipBackward={handleSkipBackward}
-        onSkipForward={handleSkipForward}
-        showSkipEpisode={!!upNextResolved?.videoId}
-        skipEpisodeLabel={upNextResolved?.episodeLabel}
-        onSkipEpisode={startNextEpisode}
-        onBack={onStop}
-        onSelectAudioTrack={handleSelectAudioTrack}
-        onSelectTextTrack={handleSelectTextTrack}
-      />
+      {/* Custom subtitles overlay for addon-provided subtitles */}
+      {selectedTextTrack?.source === 'addon' && selectedTextTrack.uri && (
+        <CustomSubtitles
+          url={selectedTextTrack.uri}
+          currentTime={currentTime}
+          delay={subtitleDelay}
+        />
+      )}
+
+      {/* Custom loading screen on first load */}
+      {showCustomLoadingScreen && (
+        <PlayerLoadingScreen backgroundImage={backgroundImage} logoImage={logoImage} />
+      )}
+
+      {!showCustomLoadingScreen && (
+        <PlayerControls
+          paused={paused}
+          currentTime={currentTime}
+          duration={duration}
+          showLoadingIndicator={isLoading || isBuffering}
+          title={title}
+          audioTracks={audioTracks}
+          textTracks={combinedSubtitles}
+          selectedAudioTrack={selectedAudioTrack}
+          selectedTextTrack={selectedTextTrack}
+          subtitleDelay={subtitleDelay}
+          onSubtitleDelayChange={setSubtitleDelay}
+          onPlayPause={handlePlayPause}
+          onSeek={handleSeek}
+          onSkipBackward={handleSkipBackward}
+          onSkipForward={handleSkipForward}
+          showSkipEpisode={!!upNextResolved?.videoId}
+          skipEpisodeLabel={upNextResolved?.episodeLabel}
+          onSkipEpisode={startNextEpisode}
+          onBack={onStop}
+          onSelectAudioTrack={handleSelectAudioTrack}
+          onSelectTextTrack={handleSelectTextTrack}
+          onVisibilityChange={setControlsVisible}
+        />
+      )}
 
       <UpNextPopup
         enabled={!didStartNextRef.current}
         metaId={metaId}
         mediaType={mediaType}
         videoId={videoId}
-        progressRatio={progressRatio}
+        progressRatio={throttledProgressRatio}
         dismissed={upNextDismissed}
         autoplayCancelled={autoplayCancelled}
+        controlsVisible={controlsVisible}
         onCancelAutoplay={() => setAutoplayCancelled(true)}
         onDismiss={() => setUpNextDismissed(true)}
         onPlayNext={startNextEpisode}

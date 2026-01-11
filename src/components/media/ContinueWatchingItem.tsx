@@ -1,5 +1,6 @@
 import { memo, useCallback } from 'react';
 import { ContinueWatchingCard } from '@/components/media/ContinueWatchingCard';
+import { ContinueWatchingItemSkeleton } from '@/components/media/ContinueWatchingItemSkeleton';
 import { useMeta } from '@/api/stremio';
 import {
   useContinueWatchingForMeta,
@@ -13,6 +14,7 @@ interface ContinueWatchingItemProps {
   entry: ContinueWatchingEntry;
   hasTVPreferredFocus?: boolean;
   onFocused?: () => void;
+  onLongPress?: (entry: ContinueWatchingEntry) => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface ContinueWatchingItemProps {
  * Fetches meta data and resolves the full entry before rendering the card.
  */
 export const ContinueWatchingItem = memo(
-  ({ entry, hasTVPreferredFocus = false, onFocused }: ContinueWatchingItemProps) => {
+  ({ entry, hasTVPreferredFocus = false, onFocused, onLongPress }: ContinueWatchingItemProps) => {
     const { pushToStreams } = useMediaNavigation();
     const getLastStreamTarget = useWatchHistoryStore((state) => state.getLastStreamTarget);
 
@@ -43,14 +45,21 @@ export const ContinueWatchingItem = memo(
       );
     }, [resolvedEntry, getLastStreamTarget, pushToStreams]);
 
-    // TODO render skeleton instead?
-    // Don't render if loading or no valid entry
-    if (isLoading || !resolvedEntry) return null;
+    const handleLongPress = useCallback(() => {
+      if (!resolvedEntry) return;
+      onLongPress?.(resolvedEntry);
+    }, [onLongPress, resolvedEntry]);
+
+    // Show skeleton while loading
+    if (isLoading || !resolvedEntry) {
+      return <ContinueWatchingItemSkeleton />;
+    }
 
     return (
       <ContinueWatchingCard
         entry={resolvedEntry}
         onPress={handlePress}
+        onLongPress={onLongPress ? handleLongPress : undefined}
         onFocused={onFocused}
         hasTVPreferredFocus={hasTVPreferredFocus}
       />
