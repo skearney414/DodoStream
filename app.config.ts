@@ -4,9 +4,18 @@ const packageJson = require('./package.json');
 export default ({ config }: ConfigContext): ExpoConfig => {
     const appBackgroundColor = '#181A20';
 
+    // Build variant selection (used to keep dev/prod separately installable).
+    // Set via EAS build profile env: APP_VARIANT=dev|prod
+    const appVariant = (process.env.APP_VARIANT ?? 'prod').toLowerCase();
+    const isDevVariant = appVariant !== 'prod';
+
+    const appName = isDevVariant ? 'DodoStream (Dev)' : 'DodoStream';
+    const iosBundleIdentifier = isDevVariant ? 'app.dodora.dodostream.dev' : 'app.dodora.dodostream';
+    const androidPackage = isDevVariant ? 'app.dodora.dodostream.dev' : 'app.dodora.dodostream';
+
     return {
         ...config,
-        name: 'DodoStream',
+        name: appName,
         slug: 'dodostream',
         version: packageJson.version,
         newArchEnabled: true,
@@ -55,7 +64,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                     enableNotificationControls: true,
                     enableBackgroundAudio: false,
                     enableADSExtension: false,
-                    enableCacheExtension: true,
+                    enablFeCacheExtension: true,
                     enableAndroidPictureInPicture: true,
                     androidExtensions: {
                         useExoplayerRtsp: false,
@@ -66,6 +75,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                 },
             ],
             'expo-libvlc-player',
+            [
+                "@sentry/react-native/expo",
+                {
+                    organization: process.env.SENTRY_ORG ?? 'dodora',
+                    project: process.env.SENTRY_PROJECT ?? 'dodostream',
+                }
+            ]
         ],
         experiments: {
             typedRoutes: true,
@@ -83,16 +99,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         assetBundlePatterns: ['**/*'],
         ios: {
             supportsTablet: true,
-            bundleIdentifier: 'app.dodora.dodostream',
+            bundleIdentifier: iosBundleIdentifier,
             backgroundColor: appBackgroundColor,
         },
         android: {
-            adaptiveIcon: {
-                foregroundImage: './assets/app/adaptive-icon.png',
-                backgroundColor: appBackgroundColor,
-            },
             userInterfaceStyle: 'dark',
-            package: 'app.dodora.dodostream',
+            package: androidPackage,
             permissions: [
                 'android.permission.FOREGROUND_SERVICE',
                 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',

@@ -1,19 +1,57 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { Modal, Pressable, StyleSheet, TVFocusGuideView } from 'react-native';
+import React, { useMemo, useState, useCallback, memo } from 'react';
+import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Box, Text, Theme } from '@/theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@shopify/restyle';
-import { ScrollView } from 'react-native-gesture-handler';
 import { Focusable } from '@/components/basic/Focusable';
+import { Modal } from '@/components/basic/Modal';
 import { TagFilters } from '@/components/basic/TagFilters';
 import { useGroupOptions } from '@/hooks/useGroupOptions';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFocusableBackgroundColor, getFocusableForegroundColor } from '@/utils/focus-colors';
+
+const getPickerListItemColors = ({
+  tone,
+  isSelected,
+  isFocused,
+}: {
+  tone: PickerItem['tone'];
+  isSelected: boolean;
+  isFocused: boolean;
+}): {
+  backgroundColor: keyof Theme['colors'];
+  foregroundColor: keyof Theme['colors'];
+} => {
+  const isDestructive = tone === 'destructive';
+  const isActiveOrFocused = isSelected || isFocused;
+
+  if (isDestructive) {
+    return {
+      backgroundColor: isActiveOrFocused ? 'danger' : 'inputBackground',
+      foregroundColor: isActiveOrFocused ? 'mainForeground' : 'danger',
+    };
+  }
+
+  return {
+    backgroundColor: getFocusableBackgroundColor({
+      isActive: isSelected,
+      isFocused,
+      defaultColor: 'inputBackground',
+    }),
+    foregroundColor: getFocusableForegroundColor({
+      isActive: isSelected,
+      isFocused,
+      defaultColor: 'mainForeground',
+    }),
+  };
+};
 
 export interface PickerItem<T extends string | number = string | number> {
   label: string;
   value: T;
   groupId?: string | null; // optional grouping identifier (e.g., language code)
+  tag?: string; // optional tag displayed as a badge (e.g., "Addon", "Video")
+  icon?: keyof typeof Ionicons.glyphMap;
+  tone?: 'default' | 'destructive';
 }
 
 export interface PickerModalProps<T extends string | number = string | number> {
@@ -30,6 +68,65 @@ export interface PickerModalProps<T extends string | number = string | number> {
   preferredGroupIds?: string[]; // bring these groups to the front
 }
 
+interface PickerListItemProps {
+  item: PickerItem<string | number>;
+  isSelected: boolean;
+  onPress: (value: string | number) => void;
+}
+
+/** Memoized list item to prevent re-renders during filter/scroll */
+const PickerListItem = memo(({ item, isSelected, onPress }: PickerListItemProps) => {
+  const theme = useTheme<Theme>();
+
+  return (
+    <Focusable onPress={() => onPress(item.value)} hasTVPreferredFocus={isSelected}>
+      {({ isFocused }) => {
+        const { backgroundColor, foregroundColor } = getPickerListItemColors({
+          tone: item.tone,
+          isSelected,
+          isFocused,
+        });
+
+        return (
+          <Box
+            backgroundColor={backgroundColor}
+            borderRadius="m"
+            paddingHorizontal="m"
+            paddingVertical="m"
+            flexDirection="row"
+            alignItems="center"
+            justifyContent="space-between">
+            <Box flexDirection="row" alignItems="center" gap="s" flex={1}>
+              {item.icon && (
+                <Box>
+                  <Ionicons name={item.icon} size={24} color={theme.colors[foregroundColor]} />
+                </Box>
+              )}
+              <Text variant="body" color={foregroundColor} fontSize={16} style={{ flex: 1 }}>
+                {item.label}
+              </Text>
+            </Box>
+            {item.tag && (
+              <Box
+                backgroundColor="focusBackground"
+                borderRadius="s"
+                paddingHorizontal="s"
+                paddingVertical="xs"
+                marginLeft="s">
+                <Text variant="caption" color="textSecondary" fontSize={12}>
+                  {item.tag}
+                </Text>
+              </Box>
+            )}
+          </Box>
+        );
+      }}
+    </Focusable>
+  );
+});
+
+PickerListItem.displayName = 'PickerListItem';
+
 export function PickerModal<T extends string | number = string | number>({
   visible,
   onClose,
@@ -43,12 +140,14 @@ export function PickerModal<T extends string | number = string | number>({
   preferredGroupIds,
 }: PickerModalProps<T>) {
   const theme = useTheme<Theme>();
-  const insets = useSafeAreaInsets();
 
-  const handleValueChange = (value: T) => {
-    onValueChange(value);
-    onClose();
-  };
+  const handleValueChange = useCallback(
+    (value: T) => {
+      onValueChange(value);
+      onClose();
+    },
+    [onValueChange, onClose]
+  );
 
   const groupIdOf = useCallback(
     (item: PickerItem<T>) => {
@@ -64,109 +163,78 @@ export function PickerModal<T extends string | number = string | number>({
     preferredGroupIds,
   });
 
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  // Initialize filter to the group of the selected item
+  const initialGroupId = useMemo(() => {
+    if (selectedValue == null) return null;
+    const selectedItem = items.find((i) => i.value === selectedValue);
+    return selectedItem ? groupIdOf(selectedItem) : null;
+  }, [items, selectedValue, groupIdOf]);
+
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroupId);
 
   const filteredItems = useMemo(() => {
     if (!selectedGroupId) return items;
     return items.filter((i) => groupIdOf(i) === selectedGroupId);
   }, [items, selectedGroupId, groupIdOf]);
 
+  // Find index of selected item for initial scroll position
+  const initialScrollIndex = useMemo(() => {
+    if (selectedValue == null) return undefined;
+    const idx = filteredItems.findIndex((i) => i.value === selectedValue);
+    return idx >= 0 ? idx : undefined;
+  }, [filteredItems, selectedValue]);
+
+  const renderItem: ListRenderItem<PickerItem<T>> = useCallback(
+    ({ item }) => (
+      <PickerListItem
+        item={item}
+        isSelected={item.value === selectedValue}
+        onPress={handleValueChange as (value: string | number) => void}
+      />
+    ),
+    [selectedValue, handleValueChange]
+  );
+
+  const keyExtractor = useCallback((item: PickerItem<T>) => item.value?.toString() ?? '', []);
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            backgroundColor: theme.colors.overlayBackground,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-            paddingLeft: insets.left,
-            paddingRight: insets.right,
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-        onPress={onClose}
-        focusable={false}>
-        <Box flex={1} justifyContent="center" alignItems="center" pointerEvents="box-none">
-          <TVFocusGuideView
-            autoFocus
-            trapFocusUp
-            trapFocusDown
-            trapFocusLeft
-            trapFocusRight
-            style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <Pressable onPress={() => {}} focusable={false}>
-              <Box
-                backgroundColor="cardBackground"
-                borderRadius="l"
-                padding="l"
-                style={{
-                  minWidth: theme.sizes.modalMinWidth,
-                  maxWidth: theme.sizes.modalMaxWidth,
-                }}>
-                <Box gap="xs">
-                  {label && (
-                    <Box flexDirection="row" alignItems="center" gap="s" marginBottom="s">
-                      {icon && (
-                        <Ionicons name={icon} size={24} color={theme.colors.mainForeground} />
-                      )}
-                      <Text variant="body" style={{ fontSize: 18, fontWeight: '600' }}>
-                        {label}
-                      </Text>
-                    </Box>
-                  )}
-                  {groups.length > 0 && (
-                    <TagFilters
-                      options={groups}
-                      selectedId={selectedGroupId}
-                      onSelectId={setSelectedGroupId}
-                      includeAllOption
-                      allLabel="All"
-                    />
-                  )}
-                  <ScrollView
-                    contentContainerStyle={{ gap: 8 }}
-                    showsVerticalScrollIndicator={false}>
-                    {filteredItems.map((item, index) => {
-                      const isSelected = item.value === selectedValue;
-                      return (
-                        <Focusable
-                          key={item.value?.toString() || index}
-                          onPress={() => handleValueChange(item.value)}
-                          hasTVPreferredFocus={isSelected}>
-                          {({ isFocused }) => (
-                            <Box
-                              backgroundColor={getFocusableBackgroundColor({
-                                isActive: isSelected,
-                                isFocused,
-                                defaultColor: 'inputBackground',
-                              })}
-                              borderRadius="m"
-                              paddingHorizontal="m"
-                              paddingVertical="m">
-                              <Text
-                                variant="body"
-                                color={getFocusableForegroundColor({
-                                  isActive: isSelected,
-                                  isFocused,
-                                  defaultColor: 'mainForeground',
-                                })}
-                                fontSize={16}>
-                                {item.label}
-                              </Text>
-                            </Box>
-                          )}
-                        </Focusable>
-                      );
-                    })}
-                  </ScrollView>
-                </Box>
-              </Box>
-            </Pressable>
-          </TVFocusGuideView>
+    <Modal visible={visible} onClose={onClose}>
+      <Box
+        backgroundColor="cardBackground"
+        borderRadius="l"
+        padding="l"
+        style={{
+          minWidth: theme.sizes.modalMinWidth,
+          maxWidth: theme.sizes.modalMaxWidth,
+        }}>
+        <Box gap="s" marginBottom="m">
+          {label && (
+            <Box flexDirection="row" alignItems="center" gap="s">
+              {icon && <Ionicons name={icon} size={24} color={theme.colors.mainForeground} />}
+              <Text variant="body" style={{ fontSize: 18, fontWeight: '600' }}>
+                {label}
+              </Text>
+            </Box>
+          )}
+          {/* Render filter header outside FlashList to prevent re-render/focus issues */}
+          {groups.length > 0 && (
+            <TagFilters
+              options={groups}
+              selectedId={selectedGroupId}
+              onSelectId={setSelectedGroupId}
+              includeAllOption
+              allLabel="All"
+            />
+          )}
         </Box>
-      </Pressable>
+        <FlashList
+          data={filteredItems}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          initialScrollIndex={initialScrollIndex}
+          showsVerticalScrollIndicator={false}
+        />
+      </Box>
     </Modal>
   );
 }
